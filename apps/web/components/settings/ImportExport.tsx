@@ -5,6 +5,7 @@ import { ActionButton } from "@/components/ui/action-button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import FilePickerButton from "@/components/ui/file-picker-button";
+import InfoTooltip from "@/components/ui/info-tooltip";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -27,10 +28,12 @@ import { SettingsPage, SettingsSection } from "./SettingsPage";
 function ImportCard({
   text,
   description,
+  titleExtra,
   children,
 }: {
   text: string;
   description: string;
+  titleExtra?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -40,7 +43,10 @@ function ImportCard({
           <Download className="h-5 w-5 text-primary" />
         </div>
         <div className="flex-1">
-          <h3 className="font-medium">{text}</h3>
+          <h3 className="flex items-center gap-1.5 font-medium">
+            {text}
+            {titleExtra}
+          </h3>
           <p>{description}</p>
         </div>
         {children}
@@ -93,39 +99,45 @@ function InstagramImportCard({
       description={t(
         "settings.import.import_bookmarks_from_instagram_saved_export",
       )}
+      titleExtra={
+        <InfoTooltip size={14}>
+          <p className="max-w-64">
+            {t(
+              "settings.import.import_bookmarks_from_instagram_saved_export_details",
+            )}
+          </p>
+        </InfoTooltip>
+      }
     >
-      <div className="flex flex-col items-end gap-1.5">
-        <div className="flex items-center gap-2">
-          <FilePickerButton
-            size="sm"
-            variant="outline"
-            loading={false}
-            accept=".html"
-            multiple={false}
-            onFileSelect={setPostsFile}
-          >
-            <p>{postsFile ? postsFile.name : "Saved posts (required)"}</p>
-          </FilePickerButton>
-          <FilePickerButton
-            size="sm"
-            variant="outline"
-            loading={false}
-            accept=".html"
-            multiple={false}
-            onFileSelect={setCollectionsFile}
-          >
-            <p>
-              {collectionsFile
-                ? collectionsFile.name
-                : "Collections (optional)"}
-            </p>
-          </FilePickerButton>
-        </div>
+      <div className="flex items-center gap-2">
+        <FilePickerButton
+          size="sm"
+          variant="outline"
+          loading={false}
+          accept=".html"
+          multiple={false}
+          onFileSelect={setPostsFile}
+        >
+          <p className="max-w-20 truncate" title={postsFile?.name}>
+            {postsFile ? postsFile.name : "Posts*"}
+          </p>
+        </FilePickerButton>
+        <FilePickerButton
+          size="sm"
+          variant="outline"
+          loading={false}
+          accept=".html"
+          multiple={false}
+          onFileSelect={setCollectionsFile}
+        >
+          <p className="max-w-20 truncate" title={collectionsFile?.name}>
+            {collectionsFile ? collectionsFile.name : "Collections"}
+          </p>
+        </FilePickerButton>
         <ActionButton
           size="sm"
           loading={isImporting}
           disabled={!postsFile}
-          className="flex items-center gap-2"
           onClick={onImport}
         >
           <p>Import</p>

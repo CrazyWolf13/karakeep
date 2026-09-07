@@ -906,8 +906,7 @@ export function parseImportFile(
           typeof combined === "object" &&
           typeof (combined as Record<string, unknown>).postsHtml === "string"
         ) {
-          postsHtml = (combined as Record<string, unknown>)
-            .postsHtml as string;
+          postsHtml = (combined as Record<string, unknown>).postsHtml as string;
           const maybeCollectionsHtml = (combined as Record<string, unknown>)
             .collectionsHtml;
           if (typeof maybeCollectionsHtml === "string") {

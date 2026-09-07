@@ -817,7 +817,7 @@ describe("parseInstagramSavedPostsFile", () => {
 
     expect(bookmarks).toHaveLength(2);
     const reel = bookmarks.find(
-      (b) => b.content.type === "link" && b.content.url.includes("reel"),
+      (b) => b.content?.type === "link" && b.content.url.includes("reel"),
     );
     expect(reel?.paths).toEqual(
       expect.arrayContaining([
@@ -827,7 +827,7 @@ describe("parseInstagramSavedPostsFile", () => {
       ]),
     );
     const post = bookmarks.find(
-      (b) => b.content.type === "link" && b.content.url.includes("/p/"),
+      (b) => b.content?.type === "link" && b.content.url.includes("/p/"),
     );
     expect(post?.paths).toEqual([["Instagram Saved"]]);
   });
