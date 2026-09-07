@@ -685,6 +685,11 @@ function parseTikTokFavoritesFile(textContent: string): ParsedBookmark[] {
     );
   }
 
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw new Error(
+      "No favorited TikTok videos were found. Make sure you're uploading the user_data_tiktok.json file from a TikTok data export that includes 'Favorite Videos'.",
+    );
+  }
   const root = data as Record<string, unknown>;
   const likesAndFavorites =
     (root["Likes and Favorites"] as Record<string, unknown> | undefined) ??
