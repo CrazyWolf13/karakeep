@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ActionButton } from "@/components/ui/action-button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import FilePickerButton from "@/components/ui/file-picker-button";
@@ -45,6 +46,92 @@ function ImportCard({
         {children}
       </CardContent>
     </Card>
+  );
+}
+
+function InstagramImportCard({
+  runUploadBookmarkFile,
+}: {
+  runUploadBookmarkFile: ReturnType<
+    typeof useBookmarkImport
+  >["runUploadBookmarkFile"];
+}) {
+  const { t } = useTranslation();
+  const [postsFile, setPostsFile] = useState<File | null>(null);
+  const [collectionsFile, setCollectionsFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const onImport = async () => {
+    if (!postsFile) {
+      return;
+    }
+    setIsImporting(true);
+    try {
+      const [postsHtml, collectionsHtml] = await Promise.all([
+        postsFile.text(),
+        collectionsFile?.text(),
+      ]);
+      const combinedFile = new File(
+        [JSON.stringify({ postsHtml, collectionsHtml })],
+        "instagram-saved.json",
+        { type: "application/json" },
+      );
+      await runUploadBookmarkFile({
+        file: combinedFile,
+        source: "instagram-saved",
+      });
+      setPostsFile(null);
+      setCollectionsFile(null);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  return (
+    <ImportCard
+      text="Instagram Saved"
+      description={t(
+        "settings.import.import_bookmarks_from_instagram_saved_export",
+      )}
+    >
+      <div className="flex flex-col items-end gap-1.5">
+        <div className="flex items-center gap-2">
+          <FilePickerButton
+            size="sm"
+            variant="outline"
+            loading={false}
+            accept=".html"
+            multiple={false}
+            onFileSelect={setPostsFile}
+          >
+            <p>{postsFile ? postsFile.name : "Saved posts (required)"}</p>
+          </FilePickerButton>
+          <FilePickerButton
+            size="sm"
+            variant="outline"
+            loading={false}
+            accept=".html"
+            multiple={false}
+            onFileSelect={setCollectionsFile}
+          >
+            <p>
+              {collectionsFile
+                ? collectionsFile.name
+                : "Collections (optional)"}
+            </p>
+          </FilePickerButton>
+        </div>
+        <ActionButton
+          size="sm"
+          loading={isImporting}
+          disabled={!postsFile}
+          className="flex items-center gap-2"
+          onClick={onImport}
+        >
+          <p>Import</p>
+        </ActionButton>
+      </div>
+    </ImportCard>
   );
 }
 
@@ -345,25 +432,7 @@ export function ImportExportRow() {
             <p>Import</p>
           </FilePickerButton>
         </ImportCard>
-        <ImportCard
-          text="Instagram Saved"
-          description={t(
-            "settings.import.import_bookmarks_from_instagram_saved_export",
-          )}
-        >
-          <FilePickerButton
-            size={"sm"}
-            loading={false}
-            accept=".html"
-            multiple={false}
-            className="flex items-center gap-2"
-            onFileSelect={(file) =>
-              runUploadBookmarkFile({ file, source: "instagram-saved" })
-            }
-          >
-            <p>Import</p>
-          </FilePickerButton>
-        </ImportCard>
+        <InstagramImportCard runUploadBookmarkFile={runUploadBookmarkFile} />
         <ImportCard
           text="TikTok Favorites"
           description={t(

@@ -613,6 +613,70 @@ function parseOneTabFile(textContent: string): ParsedBookmark[] {
   return bookmarks;
 }
 
+const INSTAGRAM_POST_LINK_SELECTOR =
+  "a[href*='instagram.com/reel/'], a[href*='instagram.com/p/']";
+const INSTAGRAM_POST_LINK_REGEX =
+  /^https:\/\/(?:www\.)?instagram\.com\/(reel|p)\/([A-Za-z0-9_-]+)\/?/;
+
+function normalizeInstagramPostUrl(href: string) {
+  const match = href.match(INSTAGRAM_POST_LINK_REGEX);
+  if (!match) {
+    return null;
+  }
+  return {
+    isReel: match[1] === "reel",
+    url: `https://www.instagram.com/${match[1]}/${match[2]}/`,
+  };
+}
+
+// Instagram's "saved collections" export (your_instagram_activity/saved/saved_collections.html)
+// groups a subset of saved posts into user-created folders. Its collection
+// names live in the first row of each collection's own table, which (unlike
+// every label in the file) isn't localized text we can match on, so we read
+// it positionally instead: for each direct child of <main> (one per
+// collection), the first table's first row's second cell is the name, and
+// every reel/post link nested anywhere below that same child belongs to it.
+function parseInstagramSavedCollectionsFile(
+  textContent: string,
+): Map<string, Set<string>> {
+  const $ = cheerio.load(textContent);
+  const urlToCollectionNames = new Map<string, Set<string>>();
+
+  $("main")
+    .children()
+    .each((_index, collectionEl) => {
+      const $collection = $(collectionEl);
+      const name = $collection
+        .find("table")
+        .first()
+        .find("tr")
+        .first()
+        .find("td")
+        .eq(1)
+        .text()
+        .trim();
+      if (!name) {
+        return;
+      }
+
+      $collection.find(INSTAGRAM_POST_LINK_SELECTOR).each((_i, a) => {
+        const href = $(a).attr("href");
+        const normalized = href ? normalizeInstagramPostUrl(href) : null;
+        if (!normalized) {
+          return;
+        }
+        let names = urlToCollectionNames.get(normalized.url);
+        if (!names) {
+          names = new Set();
+          urlToCollectionNames.set(normalized.url, names);
+        }
+        names.add(name);
+      });
+    });
+
+  return urlToCollectionNames;
+}
+
 // Instagram's "saved posts" export (your_instagram_activity/saved/saved_posts.html
 // inside the "Download your information" zip) is a legacy Facebook-style HTML
 // table, not a Netscape bookmark file. Crucially, all of its labels (e.g. the
@@ -622,38 +686,43 @@ function parseOneTabFile(textContent: string): ParsedBookmark[] {
 // instagram.com/reel/<id>/ or instagram.com/p/<id>/. Title/description are
 // intentionally left blank; Karakeep's own crawler fills those in from the
 // live page after import.
-function parseInstagramSavedPostsFile(textContent: string): ParsedBookmark[] {
+//
+// `urlToCollectionNames`, when provided from saved_collections.html, adds
+// each matching post to its collection's list *in addition to* the main
+// "Instagram Saved" list, since Instagram lets a post belong to several
+// collections at once.
+function parseInstagramSavedPostsFile(
+  textContent: string,
+  urlToCollectionNames?: Map<string, Set<string>>,
+): ParsedBookmark[] {
   const $ = cheerio.load(textContent);
   const bookmarks: ParsedBookmark[] = [];
   const seenUrls = new Set<string>();
 
-  $("a[href*='instagram.com/reel/'], a[href*='instagram.com/p/']").each(
-    (_index, el) => {
-      const href = $(el).attr("href");
-      if (!href) {
-        return;
-      }
-      const match = href.match(
-        /^https:\/\/(?:www\.)?instagram\.com\/(reel|p)\/([A-Za-z0-9_-]+)\/?/,
-      );
-      if (!match) {
-        return;
-      }
-      const isReel = match[1] === "reel";
-      const url = `https://www.instagram.com/${match[1]}/${match[2]}/`;
-      if (seenUrls.has(url)) {
-        return;
-      }
-      seenUrls.add(url);
+  $(INSTAGRAM_POST_LINK_SELECTOR).each((_index, el) => {
+    const href = $(el).attr("href");
+    const normalized = href ? normalizeInstagramPostUrl(href) : null;
+    if (!normalized) {
+      return;
+    }
+    const { isReel, url } = normalized;
+    if (seenUrls.has(url)) {
+      return;
+    }
+    seenUrls.add(url);
 
-      bookmarks.push({
-        title: "",
-        content: { type: BookmarkTypes.LINK as const, url },
-        tags: [isReel ? "instagram-reel" : "instagram-post"],
-        paths: [[isReel ? "Instagram Reels" : "Instagram Saved Posts"]],
-      });
-    },
-  );
+    const paths: string[][] = [["Instagram Saved"]];
+    for (const collectionName of urlToCollectionNames?.get(url) ?? []) {
+      paths.push(["Instagram Collections", collectionName]);
+    }
+
+    bookmarks.push({
+      title: "",
+      content: { type: BookmarkTypes.LINK as const, url },
+      tags: [isReel ? "instagram-reel" : "instagram-post"],
+      paths,
+    });
+  });
 
   if (bookmarks.length === 0) {
     throw new Error(
@@ -822,9 +891,38 @@ export function parseImportFile(
     case "onetab":
       result = parseOneTabFile(textContent);
       break;
-    case "instagram-saved":
-      result = parseInstagramSavedPostsFile(textContent);
+    case "instagram-saved": {
+      // The web UI lets users optionally attach saved_collections.html
+      // alongside saved_posts.html, bundling both as
+      // { postsHtml, collectionsHtml } JSON. Anything that isn't that shape
+      // (e.g. a bare saved_posts.html passed directly) is treated as the
+      // posts file on its own, with no collection membership.
+      let postsHtml = textContent;
+      let collectionsHtml: string | undefined;
+      try {
+        const combined: unknown = JSON.parse(textContent);
+        if (
+          combined &&
+          typeof combined === "object" &&
+          typeof (combined as Record<string, unknown>).postsHtml === "string"
+        ) {
+          postsHtml = (combined as Record<string, unknown>)
+            .postsHtml as string;
+          const maybeCollectionsHtml = (combined as Record<string, unknown>)
+            .collectionsHtml;
+          if (typeof maybeCollectionsHtml === "string") {
+            collectionsHtml = maybeCollectionsHtml;
+          }
+        }
+      } catch {
+        // Not JSON - textContent is the raw saved_posts.html itself.
+      }
+      const urlToCollectionNames = collectionsHtml
+        ? parseInstagramSavedCollectionsFile(collectionsHtml)
+        : undefined;
+      result = parseInstagramSavedPostsFile(postsHtml, urlToCollectionNames);
       break;
+    }
     case "tiktok-favorites":
       result = parseTikTokFavoritesFile(textContent);
       break;

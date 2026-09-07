@@ -758,7 +758,7 @@ describe("parseInstagramSavedPostsFile", () => {
         url: "https://www.instagram.com/reel/AbCdEfGhIj1/",
       },
       tags: ["instagram-reel"],
-      paths: [["Instagram Reels"]],
+      paths: [["Instagram Saved"]],
     });
     expect(bookmarks[1]).toMatchObject({
       content: {
@@ -766,7 +766,7 @@ describe("parseInstagramSavedPostsFile", () => {
         url: "https://www.instagram.com/p/ZyXwVuTsRq2/",
       },
       tags: ["instagram-post"],
-      paths: [["Instagram Saved Posts"]],
+      paths: [["Instagram Saved"]],
     });
   });
 
@@ -785,6 +785,51 @@ describe("parseInstagramSavedPostsFile", () => {
     expect(() => parseImportFile("instagram-saved", html)).toThrow(
       /No saved Instagram posts or reels/,
     );
+  });
+
+  it("also adds posts found in an attached saved_collections.html to their collection's list", () => {
+    const postsHtml = `<html><body><main>
+      <div class="entry">
+        <a href="https://www.instagram.com/reel/AbCdEfGhIj1/">link</a>
+      </div>
+      <div class="entry">
+        <a href="https://www.instagram.com/p/ZyXwVuTsRq2/">link</a>
+      </div>
+    </main></body></html>`;
+    // Collections are direct children of <main>; the collection name is the
+    // second cell of the first row of the first table, positionally (not by
+    // label, since labels are localized).
+    const collectionsHtml = `<html><body><main>
+      <div class="collection">
+        <table><tr><td>Name</td><td>mind</td></tr></table>
+        <a href="https://www.instagram.com/reel/AbCdEfGhIj1/">link</a>
+      </div>
+      <div class="collection">
+        <table><tr><td>Name</td><td>Food</td></tr></table>
+        <a href="https://www.instagram.com/reel/AbCdEfGhIj1/">also in this collection</a>
+      </div>
+    </main></body></html>`;
+
+    const { bookmarks } = parseImportFile(
+      "instagram-saved",
+      JSON.stringify({ postsHtml, collectionsHtml }),
+    );
+
+    expect(bookmarks).toHaveLength(2);
+    const reel = bookmarks.find(
+      (b) => b.content.type === "link" && b.content.url.includes("reel"),
+    );
+    expect(reel?.paths).toEqual(
+      expect.arrayContaining([
+        ["Instagram Saved"],
+        ["Instagram Collections", "mind"],
+        ["Instagram Collections", "Food"],
+      ]),
+    );
+    const post = bookmarks.find(
+      (b) => b.content.type === "link" && b.content.url.includes("/p/"),
+    );
+    expect(post?.paths).toEqual([["Instagram Saved"]]);
   });
 });
 
