@@ -450,6 +450,15 @@ export function ImportExportRow() {
           description={t(
             "settings.import.import_bookmarks_from_tiktok_favorites_export",
           )}
+          titleExtra={
+            <InfoTooltip size={14}>
+              <p className="max-w-64">
+                {t(
+                  "settings.import.import_bookmarks_from_tiktok_favorites_export_details",
+                )}
+              </p>
+            </InfoTooltip>
+          }
         >
           <FilePickerButton
             size={"sm"}
