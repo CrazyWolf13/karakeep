@@ -735,7 +735,16 @@ function parseInstagramSavedPostsFile(
 
 const zTikTokFavoriteVideoSchema = z.object({
   Date: z.string().optional(),
-  Link: z.string(),
+  Link: z.string().refine(
+    (u) => {
+      try {
+        return ["http:", "https:"].includes(new URL(u).protocol);
+      } catch {
+        return false;
+      }
+    },
+    { message: "Link must be an http(s) URL" },
+  ),
 });
 
 // TikTok's "Favorite Videos" export (user_data_tiktok.json, under
